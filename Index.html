@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Guide to BPMN in .NET Core</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Slate & Teal -->
+    <!-- Application Structure Plan: A single-page, multi-section layout designed as a decision-support tool. The flow guides the user from high-level concepts to a specific, actionable recommendation. It starts with an introduction, moves to the core architectural choice (Embedded vs. Standalone), presents a filterable "Tool Explorer," offers a "Playbook" of code patterns, and concludes with an interactive "Decision Helper" quiz. This structure was chosen to transform the passive report into an active guide, helping users answer "What's the right BPMN approach for my .NET project?" by making comparisons and information discovery intuitive and task-oriented. -->
+    <!-- Visualization & Content Choices: 1. Architecture Comparison: Report Info -> Table 2.1 data. Goal -> Compare. Viz -> Two-sided card layout with a central radar chart. Interaction -> Toggling between 'Embedded' and 'Standalone' updates text and the chart. Justification -> More dynamic and visually engaging than a static table for direct comparison. Library -> Chart.js. 2. Tool Explorer: Report Info -> Section 3 tool descriptions. Goal -> Organize/Inform. Viz -> Filterable grid of cards. Interaction -> Filters show/hide tools; clicking a card opens a modal with details and a bar chart for compliance/integration. Justification -> Standard, user-friendly pattern for exploring a catalog of options. Library -> Chart.js. 3. Decision Helper: Report Info -> Section 7.1 archetypes. Goal -> Guide/Recommend. Viz -> Multi-step quiz. Interaction -> User answers questions, JS logic calculates a result, and the recommended archetype is displayed. Justification -> Makes the report's strategic advice personal and actionable. Library -> HTML/JS. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* slate-50 */
+            color: #334155; /* slate-700 */
+        }
+        .nav-link {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .nav-link.active {
+            color: #0d9488; /* teal-600 */
+            border-bottom-color: #0d9488;
+        }
+        .section {
+            display: none;
+        }
+        .section.active {
+            display: block;
+        }
+        .tool-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .tool-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        .modal-content {
+            animation: slideIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .quiz-option:hover {
+            background-color: #f0fdfa; /* teal-50 */
+            border-color: #14b8a6; /* teal-500 */
+        }
+        .code-block {
+            background-color: #1e293b; /* slate-800 */
+            color: #e2e8f0; /* slate-200 */
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-x: auto;
+            font-family: monospace;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="bg-white/80 backdrop-blur-sm sticky top-0 z-50 shadow-sm">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <span class="text-2xl font-bold text-slate-800">BPMN <span class="text-teal-600">for</span> .NET</span>
+                    </div>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a onclick="showSection('introduction')" class="nav-link active text-slate-600 hover:text-teal-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">Introduction</a>
+                        <a onclick="showSection('architecture')" class="nav-link text-slate-600 hover:text-teal-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">Architecture Choice</a>
+                        <a onclick="showSection('explorer')" class="nav-link text-slate-600 hover:text-teal-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">Tool Explorer</a>
+                        <a onclick="showSection('playbook')" class="nav-link text-slate-600 hover:text-teal-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">Implementation Playbook</a>
+                        <a onclick="showSection('decision')" class="nav-link text-slate-600 hover:text-teal-600 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent">Decision Helper</a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+
+        <section id="introduction" class="section active">
+            <div class="text-center">
+                <h1 class="text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight">Unlock Process Automation in .NET</h1>
+                <p class="mt-4 max-w-2xl mx-auto text-lg text-slate-600">This guide translates the comprehensive report on BPMN into an interactive experience, helping you choose the right architecture, tools, and patterns to build resilient, transparent, and business-aligned applications with .NET.</p>
+            </div>
+
+            <div class="mt-12 grid md:grid-cols-2 gap-8 items-center">
+                <div class="prose prose-lg text-slate-600">
+                    <h2>From Diagram to Executable Logic</h2>
+                    <p>Business Process Model and Notation (BPMN) is more than just a flowcharting standard; it's a bridge between business design and technical implementation. With BPMN 2.0, diagrams become machine-executable blueprints, allowing you to move complex workflow logic out of opaque code and into a visual, shared model.</p>
+                    <ul>
+                        <li><strong class="text-teal-600">Shared Language:</strong> Create a single source of truth that both business analysts and developers can understand and validate.</li>
+                        <li><strong class="text-teal-600">Visible Logic:</strong> Make complex orchestration logic transparent and manageable, reducing misunderstandings and rework.</li>
+                        <li><strong class="text-teal-600">Engine-Driven:</strong> A workflow engine parses the BPMN XML and manages the state, timers, and execution of your processes, freeing you to focus on core business logic.</li>
+                    </ul>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-lg font-semibold text-slate-800 mb-4">The BPMN Lifecycle</h3>
+                    <div class="relative">
+                        <div class="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-200"></div>
+                        <div class="flex items-start mb-6 relative">
+                            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-teal-500 text-white flex items-center justify-center font-bold z-10">1</div>
+                            <div class="ml-4">
+                                <h4 class="font-semibold text-slate-700">Model</h4>
+                                <p class="text-sm text-slate-500">Business and IT collaborate to design the process in a BPMN modeler.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start mb-6 relative">
+                            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-teal-500 text-white flex items-center justify-center font-bold z-10">2</div>
+                            <div class="ml-4">
+                                <h4 class="font-semibold text-slate-700">Enrich</h4>
+                                <p class="text-sm text-slate-500">Developers add technical details (e.g., API topics) to make the model executable.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start mb-6 relative">
+                            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-teal-500 text-white flex items-center justify-center font-bold z-10">3</div>
+                            <div class="ml-4">
+                                <h4 class="font-semibold text-slate-700">Deploy</h4>
+                                <p class="text-sm text-slate-500">The `.bpmn` XML file is deployed to a workflow engine.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start relative">
+                            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-teal-500 text-white flex items-center justify-center font-bold z-10">4</div>
+                            <div class="ml-4">
+                                <h4 class="font-semibold text-slate-700">Execute & Automate</h4>
+                                <p class="text-sm text-slate-500">The engine runs process instances, orchestrating human tasks and automated .NET workers.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="architecture" class="section">
+            <div class="text-center">
+                <h2 class="text-3xl font-bold text-slate-900">The Foundational Choice: Engine Architecture</h2>
+                <p class="mt-2 max-w-2xl mx-auto text-lg text-slate-600">Your first and most critical decision is how to deploy the workflow engine. This choice impacts scalability, transactions, and overall system design. Select an architecture below to explore its characteristics and see a visual comparison.</p>
+            </div>
+
+            <div class="mt-8 flex justify-center space-x-4">
+                <button id="btn-embedded" onclick="selectArchitecture('embedded')" class="px-6 py-3 font-semibold text-white bg-teal-600 rounded-lg shadow-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-opacity-75">Embedded Engine (Library)</button>
+                <button id="btn-standalone" onclick="selectArchitecture('standalone')" class="px-6 py-3 font-semibold text-slate-700 bg-white rounded-lg shadow-md hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-opacity-75">Standalone Engine (Service)</button>
+            </div>
+
+            <div class="mt-8 grid lg:grid-cols-2 gap-8 items-start">
+                <div id="architecture-details" class="bg-white p-8 rounded-xl shadow-lg">
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-center font-semibold text-slate-800 mb-4">Architectural Comparison</h3>
+                    <div class="chart-container relative h-80 md:h-96 w-full max-w-lg mx-auto">
+                        <canvas id="architectureChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="explorer" class="section">
+            <div class="text-center">
+                <h2 class="text-3xl font-bold text-slate-900">.NET BPMN Tool Explorer</h2>
+                <p class="mt-2 max-w-2xl mx-auto text-lg text-slate-600">The .NET ecosystem offers a diverse range of tools. Use the filters to explore engines and libraries based on their architecture, and click on any tool to see a detailed overview.</p>
+            </div>
+
+            <div class="mt-8 flex justify-center space-x-2 md:space-x-4">
+                <button onclick="filterTools('all')" class="filter-btn active px-4 py-2 text-sm md:text-base font-semibold bg-teal-600 text-white rounded-full">All</button>
+                <button onclick="filterTools('standalone')" class="filter-btn px-4 py-2 text-sm md:text-base font-semibold bg-white text-slate-600 rounded-full">Standalone Engines</button>
+                <button onclick="filterTools('embedded')" class="filter-btn px-4 py-2 text-sm md:text-base font-semibold bg-white text-slate-600 rounded-full">Embedded Engines</button>
+                <button onclick="filterTools('library')" class="filter-btn px-4 py-2 text-sm md:text-base font-semibold bg-white text-slate-600 rounded-full">Utility Libraries</button>
+            </div>
+
+            <div id="tool-grid" class="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            </div>
+        </section>
+
+        <section id="playbook" class="section">
+            <div class="text-center">
+                <h2 class="text-3xl font-bold text-slate-900">Implementation Playbook</h2>
+                <p class="mt-2 max-w-2xl mx-auto text-lg text-slate-600">Find practical, copy-paste ready code snippets for common BPMN implementation patterns in .NET. Select a tool and a pattern to view the relevant C# code and explanation.</p>
+            </div>
+            <div class="mt-8 max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-6">
+                <div class="grid md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label for="playbook-tool" class="block text-sm font-medium text-slate-700">Select Tool:</label>
+                        <select id="playbook-tool" onchange="updatePlaybook()" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm rounded-md">
+                        </select>
+                    </div>
+                    <div>
+                        <label for="playbook-pattern" class="block text-sm font-medium text-slate-700">Select Pattern:</label>
+                        <select id="playbook-pattern" onchange="updatePlaybook()" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm rounded-md">
+                        </select>
+                    </div>
+                </div>
+                <div id="playbook-content">
+                    <h3 id="playbook-title" class="text-xl font-semibold text-slate-800 mb-2"></h3>
+                    <p id="playbook-description" class="text-slate-600 mb-4"></p>
+                    <div id="playbook-code" class="code-block"></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="decision" class="section">
+            <div class="text-center">
+                <h2 class="text-3xl font-bold text-slate-900">Decision Helper</h2>
+                <p class="mt-2 max-w-2xl mx-auto text-lg text-slate-600">Answer a few questions about your project, and we'll suggest the most suitable BPMN toolset archetype based on the report's strategic recommendations.</p>
+            </div>
+
+            <div class="mt-8 max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-6 md:p-8">
+                <div id="quiz-container">
+                </div>
+                <div id="quiz-result" class="hidden text-center">
+                    <h3 class="text-2xl font-bold text-slate-800">Your Recommended Archetype:</h3>
+                    <div id="result-card" class="mt-4 p-6 bg-teal-50 border-2 border-teal-200 rounded-lg">
+                        <h4 id="result-title" class="text-xl font-semibold text-teal-800"></h4>
+                        <p id="result-rationale" class="mt-2 text-teal-700"></p>
+                        <div class="mt-4">
+                            <strong class="text-teal-800">Suggested Tools:</strong>
+                            <p id="result-tools" class="text-teal-700"></p>
+                        </div>
+                    </div>
+                    <button onclick="resetQuiz()" class="mt-6 px-6 py-2 font-semibold text-teal-600 bg-white border border-teal-600 rounded-lg hover:bg-teal-50">Start Over</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <div id="tool-modal" class="modal" onclick="closeModal(event)">
+        <div class="modal-content bg-white rounded-lg shadow-xl m-4 md:my-8 max-w-3xl mx-auto">
+            <div class="flex justify-between items-center p-4 border-b">
+                <h3 id="modal-title" class="text-2xl font-bold text-slate-800"></h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </div>
+            <div class="p-6">
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <p id="modal-description" class="text-slate-600 mb-4"></p>
+                        <div id="modal-details" class="text-sm space-y-2"></div>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-slate-700 mb-2">Tool Profile</h4>
+                        <div class="chart-container relative h-64 w-full">
+                            <canvas id="toolChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+             <div class="px-6 py-4 bg-slate-50 rounded-b-lg text-right">
+                <button onclick="closeModal()" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-teal-700">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const sections = ['introduction', 'architecture', 'explorer', 'playbook', 'decision'];
+        const navLinks = document.querySelectorAll('.nav-link');
+
+        function showSection(id) {
+            sections.forEach(sectionId => {
+                document.getElementById(sectionId).classList.remove('active');
+            });
+            document.getElementById(id).classList.add('active');
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('onclick').includes(id)) {
+                    link.classList.add('active');
+                }
+            });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        const architectureData = {
+            embedded: {
+                title: 'Embedded Engine (The Library Pattern)',
+                description: "The workflow engine is integrated into your .NET application as a library (e.g., a NuGet package). It runs in the same process, sharing memory, resources, and often, the same database transaction.",
+                pros: [
+                    "<strong>Simple Deployment:</strong> Just another dependency in your project.",
+                    "<strong>High Performance:</strong> In-process calls are fast method invocations, no network latency.",
+                    "<strong>Simplified Transactions:</strong> Can participate in local ACID database transactions, ensuring strong consistency."
+                ],
+                cons: [
+                    "<strong>Tight Coupling:</strong> Workflow logic is tied to the application's lifecycle and tech stack.",
+                    "<strong>Limited Scalability:</strong> Scales with the host application, not independently.",
+                    "<strong>Homogeneous Stack:</strong> Best suited for single-language (.NET) environments."
+                ],
+                bestFit: "Monolithic applications or state management within a single microservice.",
+                chartData: [5, 9, 3, 9, 3, 3, 8]
+            },
+            standalone: {
+                title: 'Standalone Engine (The Service Pattern)',
+                description: "The workflow engine runs as a separate server (e.g., in a Docker container). Your .NET applications communicate with it over the network using APIs (REST or gRPC).",
+                pros: [
+                    "<strong>Decoupling:</strong> Engine and workers are managed and scaled independently, increasing resilience.",
+                    "<strong>Superior Scalability:</strong> Scale the engine and workers separately based on specific loads.",
+                    "<strong>Polyglot Orchestration:</strong> A single engine can orchestrate services written in any language (.NET, Go, Java, etc.)."
+                ],
+                cons: [
+                    "<strong>Higher Complexity:</strong> Requires separate hosting, networking, and operational management.",
+                    "<strong>Network Latency:</strong> Every interaction with the engine is a network call.",
+                    "<strong>Distributed Transactions:</strong> Requires patterns like Saga to ensure eventual consistency."
+                ],
+                bestFit: "Microservice orchestration, end-to-end business process automation, and polyglot systems.",
+                chartData: [8, 5, 9, 4, 9, 8, 5]
+            }
+        };
+
+        let architectureChart;
+        function selectArchitecture(type) {
+            const data = architectureData[type];
+            const detailsDiv = document.getElementById('architecture-details');
+            
+            let prosHtml = data.pros.map(pro => `<li class="flex items-start"><span class="text-teal-500 mr-2 mt-1">&#10003;</span><span>${pro}</span></li>`).join('');
+            let consHtml = data.cons.map(con => `<li class="flex items-start"><span class="text-red-500 mr-2 mt-1">&#10007;</span><span>${con}</span></li>`).join('');
+
+            detailsDiv.innerHTML = `
+                <h3 class="text-2xl font-bold text-slate-800 mb-3">${data.title}</h3>
+                <p class="text-slate-600 mb-6">${data.description}</p>
+                <div class="grid md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <h4 class="font-semibold text-slate-700 mb-2">Advantages</h4>
+                        <ul class="space-y-2 text-slate-600">${prosHtml}</ul>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-slate-700 mb-2">Considerations</h4>
+                        <ul class="space-y-2 text-slate-600">${consHtml}</ul>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-slate-700 mb-2">Best Fit For:</h4>
+                    <p class="bg-slate-100 p-3 rounded-lg text-slate-700">${data.bestFit}</p>
+                </div>
+            `;
+
+            document.getElementById('btn-embedded').classList.toggle('bg-teal-600', type === 'embedded');
+            document.getElementById('btn-embedded').classList.toggle('text-white', type === 'embedded');
+            document.getElementById('btn-embedded').classList.toggle('bg-white', type !== 'embedded');
+            document.getElementById('btn-standalone').classList.toggle('bg-teal-600', type === 'standalone');
+            document.getElementById('btn-standalone').classList.toggle('text-white', type === 'standalone');
+            document.getElementById('btn-standalone').classList.toggle('bg-white', type !== 'standalone');
+
+            architectureChart.data.datasets[0].data = data.chartData;
+            architectureChart.update();
+        }
+
+        function initArchitectureChart() {
+            const ctx = document.getElementById('architectureChart').getContext('2d');
+            const labels = ['Deployment Complexity', 'Performance (In-Process)', 'Scalability', 'Transactional Integrity', 'Polyglot Support', 'Operational Overhead', 'Fault Tolerance'];
+            architectureChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Architecture Profile',
+                        data: [],
+                        backgroundColor: 'rgba(13, 148, 136, 0.2)',
+                        borderColor: 'rgb(13, 148, 136)',
+                        pointBackgroundColor: 'rgb(13, 148, 136)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgb(13, 148, 136)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            angleLines: { color: '#cbd5e1' },
+                            grid: { color: '#e2e8f0' },
+                            pointLabels: { font: { size: 12 } },
+                            ticks: {
+                                backdropColor: 'rgba(255, 255, 255, 0.75)',
+                                color: '#64748b',
+                                stepSize: 2,
+                                display: false
+                            },
+                            min: 0,
+                            max: 10
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+            selectArchitecture('embedded');
+        }
+        
+        const toolsData = [
+            { id: 'c8', name: 'Camunda Platform 8', category: 'standalone', desc: 'A next-gen, cloud-native engine for high-throughput microservice orchestration, using gRPC for communication.', integration: 'gRPC Client (`zb-client`)', compliance: 10, license: 'Source-Available, Enterprise', tooling: 'Web Modeler, Operate, Tasklist' },
+            { id: 'c7', name: 'Camunda Platform 7', category: 'standalone', desc: 'A mature, battle-tested engine widely used in enterprises, with a comprehensive REST API.', integration: 'REST API Client (`Camunda.Worker`)', compliance: 10, license: 'Open Source (Apache 2.0), Enterprise', tooling: 'Web Modeler, Cockpit, Tasklist' },
+            { id: 'slickflow', name: 'Slickflow.NET', category: 'embedded', desc: 'An open-source, native .NET engine with a developer-centric, code-first fluent API for defining processes.', integration: 'Native .NET Library', compliance: 6, license: 'Open Source, Commercial', tooling: 'HTML5 Web Designer' },
+            { id: 'wfe', name: 'WorkflowEngine.NET', category: 'embedded', desc: 'A commercial .NET component that imports BPMN diagrams and translates them into its proprietary activity/transition model.', integration: 'Native .NET Library', compliance: 4, license: 'Commercial', tooling: 'JavaScript Web Designer' },
+            { id: 'bpmnsharp', name: 'BPMN.Sharp', category: 'library', desc: 'A C# library for reading, parsing, validating, and programmatically creating BPMN 2.0 XML files.', integration: 'C# Library API', compliance: 8, license: 'Open Source', tooling: 'N/A (Library)' },
+            { id: 'bpmnio', name: 'bpmn.io', category: 'library', desc: 'A suite of JavaScript libraries for rendering and editing BPMN diagrams in the browser. A purely front-end solution.', integration: 'JavaScript Library', compliance: 9, license: 'Open Source', tooling: 'Embeddable Modeler/Viewer' },
+        ];
+
+        const toolGrid = document.getElementById('tool-grid');
+        function populateTools() {
+            toolGrid.innerHTML = '';
+            toolsData.forEach(tool => {
+                const card = document.createElement('div');
+                card.className = `tool-card bg-white rounded-xl shadow-lg p-6 cursor-pointer ${tool.category}`;
+                card.setAttribute('onclick', `openModal('${tool.id}')`);
+                let categoryColor = { standalone: 'bg-blue-100 text-blue-800', embedded: 'bg-green-100 text-green-800', library: 'bg-yellow-100 text-yellow-800'}[tool.category];
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <h3 class="text-xl font-bold text-slate-800">${tool.name}</h3>
+                        <span class="text-xs font-semibold px-2 py-1 rounded-full ${categoryColor}">${tool.category.charAt(0).toUpperCase() + tool.category.slice(1)}</span>
+                    </div>
+                    <p class="mt-2 text-slate-600">${tool.desc}</p>
+                `;
+                toolGrid.appendChild(card);
+            });
+        }
+
+        function filterTools(category) {
+            const cards = toolGrid.querySelectorAll('.tool-card');
+            cards.forEach(card => {
+                if (category === 'all' || card.classList.contains(category)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('bg-teal-600', 'text-white');
+                btn.classList.add('bg-white', 'text-slate-600');
+            });
+            const activeBtn = document.querySelector(`.filter-btn[onclick="filterTools('${category}')"]`);
+            activeBtn.classList.add('bg-teal-600', 'text-white');
+            activeBtn.classList.remove('bg-white', 'text-slate-600');
+        }
+
+        let toolChart;
+        function openModal(id) {
+            const tool = toolsData.find(t => t.id === id);
+            document.getElementById('modal-title').innerText = tool.name;
+            document.getElementById('modal-description').innerText = tool.desc;
+            document.getElementById('modal-details').innerHTML = `
+                <p><strong class="font-semibold text-slate-600">Category:</strong> ${tool.category}</p>
+                <p><strong class="font-semibold text-slate-600">.NET Integration:</strong> ${tool.integration}</p>
+                <p><strong class="font-semibold text-slate-600">License:</strong> ${tool.license}</p>
+                <p><strong class="font-semibold text-slate-600">Tooling:</strong> ${tool.tooling}</p>
+            `;
+            document.getElementById('tool-modal').style.display = 'flex';
+            
+            const ctx = document.getElementById('toolChart').getContext('2d');
+            if(toolChart) toolChart.destroy();
+            toolChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['BPMN Compliance', '.NET Integration'],
+                    datasets: [{
+                        label: 'Tool Rating (out of 10)',
+                        data: [tool.compliance, tool.integration.includes('Native') ? 9 : 7],
+                        backgroundColor: ['rgba(13, 148, 136, 0.6)', 'rgba(56, 189, 248, 0.6)'],
+                        borderColor: ['rgb(13, 148, 136)', 'rgb(56, 189, 248)'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { beginAtZero: true, max: 10, grid: { color: '#e2e8f0' } },
+                        y: { grid: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function closeModal(event) {
+            if (event && event.target.id !== 'tool-modal' && !event.target.closest('.modal-content')) return;
+            document.getElementById('tool-modal').style.display = 'none';
+        }
+
+        const playbookData = {
+            'Camunda 8': {
+                'External Worker': {
+                    desc: 'Implement a worker to subscribe to a topic and execute C# logic. The Zeebe Accelerator simplifies DI and handler registration.',
+                    code: `// PaymentWorker.cs\npublic class PaymentWorker : IAsyncZeebeWorker<Payload>\n{\n    public async Task HandleJob(ZeebeJob<Payload> job, CancellationToken ct)\n    {\n        // Your business logic here\n        Console.WriteLine("Processing job: " + job.Key);\n        await job.Client.NewCompleteJobCommand(job.Key).Send();\n    }\n}`
+                },
+                'Error Handling': {
+                    desc: 'Catch a business exception and throw a BpmnErrorException to trigger an Error Boundary Event in the model.',
+                    code: `try \n{\n    // Risky business logic\n}\ncatch (PaymentDeclinedException ex)\n{\n    await job.Client.NewThrowErrorCommand(job.Key, "PAYMENT_DECLINED", ex.Message).Send();\n}`
+                },
+                'Start Process': {
+                    desc: 'Start a new process instance via the gRPC client, optionally passing variables as a JSON string.',
+                    code: `var zeebeClient = ZeebeClient.Builder()...Build();\nawait zeebeClient.NewCreateInstanceCommand()\n   .BpmnProcessId("order-fulfillment")\n   .LatestVersion()\n   .Variables("{\\"orderId\\":\\"123\\"}")\n   .Send();`
+                }
+            },
+            'Camunda 7': {
+                'External Worker': {
+                    desc: 'Use the Camunda.Worker library to poll the engine for external tasks on a given topic.',
+                    code: `// PaymentHandler.cs\npublic class PaymentHandler : IExternalTaskHandler\n{\n    public async Task<IExecutionResult> HandleAsync(ExternalTask task, CancellationToken ct)\n    {\n        // Business logic\n        return new CompleteResult();\n    }\n}`
+                },
+                'Manage User Tasks': {
+                    desc: 'Use the Camunda.Api.Client to query for user tasks and complete them, enabling custom task list UIs.',
+                    code: `var client = CamundaClient.Create("http://...");\nvar tasks = await client.UserTasks.Query(new TaskQuery { Assignee = "demo" }).List();\nawait client.UserTasks[tasks[0].Id].Complete(new CompleteTask());`
+                }
+            },
+            'Slickflow.NET': {
+                'Define in Code': {
+                    desc: 'Use the ProcessModelBuilder fluent API to define the entire workflow structure in C#.',
+                    code: `var pmb = ProcessModelBuilder.CreateProcess("Order Process", "order", "1.0");\npmb.Start("Start")\n  .Task("Process Payment")\n  .End("End")\n  .Store();`
+                },
+                'Execute Process': {
+                    desc: 'Use the IWorkflowService to start instances and move them through the process steps.',
+                    code: `IWorkflowService wfService = new WorkflowService();\nvar runner = wfService.CreateRunner("user");\nrunner.UseProcess("order").Start();\nrunner.OnTask(taskId).Run();`
+                }
+            }
+        };
+
+        function initPlaybook() {
+            const toolSelect = document.getElementById('playbook-tool');
+            toolSelect.innerHTML = Object.keys(playbookData).map(tool => `<option value="${tool}">${tool}</option>`).join('');
+            updatePlaybook();
+        }
+
+        function updatePlaybook() {
+            const tool = document.getElementById('playbook-tool').value;
+            const patternSelect = document.getElementById('playbook-pattern');
+            const patterns = playbookData[tool];
+            patternSelect.innerHTML = Object.keys(patterns).map(p => `<option value="${p}">${p}</option>`).join('');
+            
+            const pattern = patternSelect.value;
+            const data = patterns[pattern];
+            document.getElementById('playbook-title').innerText = `${tool}: ${pattern}`;
+            document.getElementById('playbook-description').innerText = data.desc;
+            document.getElementById('playbook-code').innerHTML = data.code;
+        }
+
+        const quizData = [
+            {
+                question: "What is your primary system architecture?",
+                options: [
+                    { text: "Cloud-Native Microservices", scores: { c8: 3, c7: 1 } },
+                    { text: "Existing Monolith or SOA", scores: { c7: 3, wfe: 2, c8: 1 } },
+                    { text: "Single .NET Application", scores: { slickflow: 3, wfe: 2 } }
+                ]
+            },
+            {
+                question: "What is your team's main priority?",
+                options: [
+                    { text: "High Throughput & Scalability", scores: { c8: 3 } },
+                    { text: "Business & IT Alignment (Visual Model is Truth)", scores: { c8: 2, c7: 2 } },
+                    { text: "Developer-centric, Code-first Experience", scores: { slickflow: 3 } },
+                    { text: "Simple integration into one app", scores: { wfe: 2, slickflow: 1 } }
+                ]
+            },
+            {
+                question: "Do you need to orchestrate services in multiple programming languages?",
+                options: [
+                    { text: "Yes, polyglot support is essential", scores: { c8: 3, c7: 2 } },
+                    { text: "No, we are a pure .NET shop", scores: { slickflow: 2, wfe: 1 } }
+                ]
+            }
+        ];
+        
+        const archetypes = {
+            c8: { title: "Cloud-Native Microservices", rationale: "Your focus on microservices, scalability, and polyglot support makes Camunda 8 the ideal choice. Its event-sourced architecture is purpose-built for high-throughput, resilient orchestration in distributed environments.", tools: "Camunda Platform 8" },
+            c7: { title: "Enterprise Monolith/SOA Modernization", rationale: "Your need to untangle logic in an existing system while maintaining stability points to Camunda 7. Its mature, REST-based external task pattern allows for clean decoupling without a full architectural rewrite.", tools: "Camunda Platform 7" },
+            slickflow: { title: "Developer-Centric .NET", rationale: "Your preference for a code-first approach where all logic resides in C# makes Slickflow.NET a strong fit. Its fluent API provides maximum control for developers within a familiar .NET environment.", tools: "Slickflow.NET" },
+            wfe: { title: "Embedded Simplicity", rationale: "For workflows contained within a single application boundary where ease of integration and local transactions are key, an embedded engine like WorkflowEngine.NET is a practical choice, despite its translation-based approach to BPMN.", tools: "WorkflowEngine.NET" }
+        };
+
+        let currentQuestion = 0;
+        let scores = { c8: 0, c7: 0, slickflow: 0, wfe: 0 };
+
+        function displayQuestion() {
+            const q = quizData[currentQuestion];
+            const quizContainer = document.getElementById('quiz-container');
+            let optionsHtml = q.options.map((opt, index) => 
+                `<div class="quiz-option border-2 border-slate-200 rounded-lg p-4 cursor-pointer transition" onclick="selectAnswer(${index})">
+                    ${opt.text}
+                </div>`
+            ).join('');
+            quizContainer.innerHTML = `
+                <h4 class="text-lg font-semibold text-slate-800 mb-4">${currentQuestion + 1}. ${q.question}</h4>
+                <div class="space-y-3">${optionsHtml}</div>
+            `;
+        }
+
+        function selectAnswer(optionIndex) {
+            const selectedOption = quizData[currentQuestion].options[optionIndex];
+            for (const [key, value] of Object.entries(selectedOption.scores)) {
+                scores[key] += value;
+            }
+            currentQuestion++;
+            if (currentQuestion < quizData.length) {
+                displayQuestion();
+            } else {
+                showResult();
+            }
+        }
+
+        function showResult() {
+            document.getElementById('quiz-container').classList.add('hidden');
+            document.getElementById('quiz-result').classList.remove('hidden');
+
+            const winner = Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b);
+            const result = archetypes[winner];
+            
+            document.getElementById('result-title').innerText = result.title;
+            document.getElementById('result-rationale').innerText = result.rationale;
+            document.getElementById('result-tools').innerText = result.tools;
+        }
+
+        function resetQuiz() {
+            currentQuestion = 0;
+            scores = { c8: 0, c7: 0, slickflow: 0, wfe: 0 };
+            document.getElementById('quiz-container').classList.remove('hidden');
+            document.getElementById('quiz-result').classList.add('hidden');
+            displayQuestion();
+        }
+
+        window.onload = () => {
+            showSection('introduction');
+            initArchitectureChart();
+            populateTools();
+            initPlaybook();
+            displayQuestion();
+        };
+
+    </script>
+</body>
+</html>
